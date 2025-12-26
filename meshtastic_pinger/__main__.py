@@ -89,3 +89,6 @@ def main():
     except KeyboardInterrupt:
         logger.info("Stopping on user request")
 
+
+if __name__ == "__main__":
+    main()
