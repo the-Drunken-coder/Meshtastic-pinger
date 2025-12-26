@@ -54,9 +54,9 @@ Default template: `GPS {lat:.6f},{lon:.6f} sats {satellites} hdop {hdop:.1f} {ti
 
 ## Testing
 
-Run the unit tests with:
+Install `pytest` if it's not already available, then run the unit tests with:
 
 ```bash
+python -m pip install pytest
 python -m pytest
 ```
-
