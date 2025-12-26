@@ -9,7 +9,7 @@ from typing import Iterable, Optional, Set
 import pynmea2
 import serial
 
-from .serial_utils import GPS_KEYWORDS, find_port_by_keywords
+from .serial_utils import GPS_KEYWORDS, auto_detect_gps_port, find_port_by_keywords
 
 logger = logging.getLogger(__name__)
 
@@ -90,10 +90,6 @@ def parse_nmea_sentence(sentence: str) -> Optional[GpsFix]:
     )
 
 
-def _auto_detect_port(exclude: Iterable[str] | None = None) -> Optional[str]:
-    return find_port_by_keywords(GPS_KEYWORDS, exclude)
-
-
 class SerialGpsReader:
     def __init__(
         self,
@@ -102,7 +98,7 @@ class SerialGpsReader:
         timeout: float = 1.0,
         exclude_ports: Optional[Iterable[str]] = None,
     ):
-        self._port = port or _auto_detect_port(exclude_ports)
+        self._port = port or auto_detect_gps_port(exclude_ports)
         if not self._port:
             raise ValueError(
                 "Unable to detect GPS port. Provide `gps_port` in configuration or "

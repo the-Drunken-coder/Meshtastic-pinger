@@ -61,3 +61,19 @@ def auto_detect_radio_port(exclude_ports: Iterable[str] | None = None) -> Option
         return port.device
     return None
 
+
+def auto_detect_gps_port(exclude_ports: Iterable[str] | None = None) -> Optional[str]:
+    exclude = {bee.lower() for bee in exclude_ports or set()}
+    candidates = _list_ports()
+
+    # 1. Try GPS-specific keywords
+    gps = find_port_by_keywords(GPS_KEYWORDS, exclude)
+    if gps:
+        return gps
+
+    # 2. Fallback: If there is exactly one port left that isn't excluded, assume it's the GPS
+    remaining = [p for p in candidates if _normalize_device(p.device) not in exclude]
+    if len(remaining) == 1:
+        return remaining[0].device
+
+    return None
