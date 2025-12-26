@@ -99,7 +99,8 @@ class MeshtasticClient:
         
         logger.info("Connecting to Meshtastic radio on %s (timeout=20s)...", self.device)
         try:
-            self._interface = SerialInterface(devPath=self.device, timeout=20)
+            # noNodes=True avoids downloading the node list, which is much faster/reliable on slow links
+            self._interface = SerialInterface(devPath=self.device, timeout=20, noNodes=True)
         except Exception as exc:
             logger.error("Failed to connect to radio: %s", exc)
             raise
