@@ -14,6 +14,16 @@ from .gps import GpsFix
 logger = logging.getLogger(__name__)
 
 
+class _SafeUnavailable(str):
+    """String sentinel that ignores format specifiers (e.g., {:.1f})."""
+
+    def __format__(self, format_spec: str) -> str:  # pragma: no cover - trivial
+        return str(self)
+
+
+_UNAVAILABLE = _SafeUnavailable("n/a")
+
+
 def resolve_destination(target: str) -> Union[int, str]:
     normalized = target.strip()
     if not normalized or normalized.lower() in {"broadcast", "all"}:
@@ -85,6 +95,7 @@ class MeshtasticClient:
 
     def __post_init__(self) -> None:
         self._destination = resolve_destination(self.target_node)
+        self._destination_num = self._resolve_destination_num(self._destination)
         self._interface = SerialInterface(devPath=self.device)
         self._radio_mode_value = resolve_radio_mode(self.radio_mode)
         self._configure_radio_mode()
@@ -113,21 +124,98 @@ class MeshtasticClient:
     def close(self) -> None:
         self._interface.close()
 
-    def _read_signal_strength(self) -> Optional[float]:
-        if self._destination in (BROADCAST_ADDR, LOCAL_ADDR):
+    @staticmethod
+    def _resolve_destination_num(dest: Union[int, str]) -> Optional[int]:
+        if dest in (BROADCAST_ADDR, LOCAL_ADDR):
+            return None
+        if isinstance(dest, int):
+            return dest
+        try:
+            value = str(dest).strip()
+            if value.lower().startswith("0x"):
+                value = value[2:]
+            value = value.lstrip("!")
+            return int(value[-8:], 16)
+        except (TypeError, ValueError):
+            return None
+
+    @staticmethod
+    def _extract_snr(entry: Optional[Dict[str, Any]]) -> Optional[float]:
+        if not entry:
+            return None
+        snr: Any = entry.get("snr")
+        if snr is None:
+            last = entry.get("lastReceived")
+            if isinstance(last, dict):
+                snr = last.get("rxSnr")
+                if snr is None:
+                    snr = last.get("snr")
+        if snr in (None, -128):
             return None
         try:
-            node = self._interface.getNode(self._destination, requestChannels=False)
-            return getattr(node, "snr", None)
+            return float(snr)
+        except (TypeError, ValueError):
+            return None
+
+    def _read_signal_strength(self) -> Optional[float]:
+        try:
+            nodes = getattr(self._interface, "nodesByNum", None) or {}
+            if self._destination_num is not None:
+                snr = self._extract_snr(nodes.get(self._destination_num))
+                if snr is not None:
+                    return snr
+
+            nodes_by_id = getattr(self._interface, "nodesById", None) or {}
+            entry = nodes_by_id.get(self._destination)
+            if entry is not None:
+                snr = self._extract_snr(entry)
+                if snr is not None:
+                    return snr
+
+            node = self._interface.getNode(self._destination)
+            entry = getattr(node, "entry", None)
+            if entry is not None:
+                snr = self._extract_snr(entry)
+                if snr is not None:
+                    return snr
+
+            node_num = getattr(node, "nodeNum", None)
+            if node_num is not None:
+                snr = self._extract_snr(nodes.get(node_num))
+                if snr is not None:
+                    return snr
         except Exception as exc:  # pragma: no cover - library-side failure
             logger.debug("Unable to read signal strength for %s: %s", self._destination, exc)
+            return None
+        return None
+
+    def _read_local_signal_strength(self) -> Optional[float]:
+        try:
+            nodes = getattr(self._interface, "nodesByNum", None) or {}
+            latest: Optional[float] = None
+            latest_seen: float = -1
+            for entry in nodes.values():
+                snr = self._extract_snr(entry)
+                if snr is None:
+                    continue
+                heard = entry.get("lastHeard") or 0
+                if heard >= latest_seen:
+                    latest_seen = heard
+                    latest = snr
+            return latest
+        except Exception:
             return None
 
     def send_fix(self, fix: GpsFix, template: str) -> Any:
         extras: Dict[str, Any] = {}
         signal = self._read_signal_strength()
+        extras["snr"] = signal if signal is not None else _UNAVAILABLE
         if signal is not None:
-            extras["snr"] = signal
+            logger.info("Signal strength for %s: %s dB", self._destination, signal)
+        radio_signal = self._read_local_signal_strength()
+        extras["radio_snr"] = radio_signal if radio_signal is not None else _UNAVAILABLE
+        if radio_signal is not None:
+            logger.info("Radio signal strength: %s dB", radio_signal)
         message = build_message(template, fix, extra=extras or None)
         logger.info("Sending to %s: %s", self._destination, message)
         return self._interface.sendText(

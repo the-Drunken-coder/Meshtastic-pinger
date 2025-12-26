@@ -17,8 +17,6 @@ message to a configured target radio.
    ```json
    {
      "target_node": "ABCDEFG12345",
-     "meshtastic_port": "COM7",
-     "gps_port": "COM4",
      "send_interval_seconds": 60,
      "gps_timeout_seconds": 15,
      "message_template": "GPS {lat:.5f},{lon:.5f} sats {satellites} hdop {hdop:.1f} {time}",
@@ -28,8 +26,7 @@ message to a configured target radio.
 
    Only `target_node` is required; all other values honor sensible defaults or can be provided through environment variables.
 
-3. Plug in the Meshtastic radio and the USB GPS module. The radio port will be auto-detected by matching its description (e.g., “Meshtastic”, “T-Beam”, “USB Serial”) unless you set `meshtastic_port`, and the GPS module can be explicitly configured via
-   `gps_port` or automatically detected if its description contains GPS-related keywords.
+3. Plug in both devices. The radio port is now fully auto-detected (it looks for keywords like “Meshtastic”/“T-Beam” and assumes the other COM port is your GPS), while the GPS reader still allows overriding `gps_port` when needed.
 
 4. Run the pinger with:
 
@@ -50,7 +47,7 @@ You can override defaults via environment variables:
 - `MESHTASTIC_PINGER_GPS_PORT` – serial port for the GPS module.
 - `MESHTASTIC_PINGER_INTERVAL` – seconds between transmissions.
 - `MESHTASTIC_PINGER_GPS_TIMEOUT` – seconds to wait for a GPS fix.
-- `MESHTASTIC_PINGER_TEMPLATE` – message template (can refer to `lat`, `lon`, `hdop`, `satellites`, `fix_quality`, `time`, `date`, `timestamp`, or `snr`).
+- `MESHTASTIC_PINGER_TEMPLATE` – message template (can refer to `lat`, `lon`, `hdop`, `satellites`, `fix_quality`, `time`, `date`, `timestamp`, `snr`, or `radio_snr`).
 - `MESHTASTIC_PINGER_RADIO_MODE` – Meshtastic modem preset (e.g., `longfast`, `mediumslow`, `shortturbo`). Defaults to `longfast`.
 
 Default template: `GPS {lat:.6f},{lon:.6f} sats {satellites} hdop {hdop:.1f} {time}`.

@@ -132,8 +132,12 @@ class SerialGpsReader:
             except UnicodeDecodeError:
                 continue
             fix = parse_nmea_sentence(sentence)
-            if fix:
-                logger.debug("GPS fix acquired: %s", fix)
-                return fix
+            if not fix:
+                continue
+            if fix.satellites is None:
+                logger.debug("GPS fix missing satellite count, waiting for next sentence")
+                continue
+            logger.debug("GPS fix acquired: %s", fix)
+            return fix
         raise TimeoutError("Timed out waiting for GPS fix")
 

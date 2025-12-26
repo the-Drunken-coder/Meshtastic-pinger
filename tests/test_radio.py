@@ -1,15 +1,50 @@
 from datetime import datetime, timezone
 
 import pytest
-from meshtastic import BROADCAST_ADDR
+from meshtastic import BROADCAST_ADDR, LOCAL_ADDR
 from meshtastic.protobuf import config_pb2
 
 from meshtastic_pinger.gps import GpsFix
 from meshtastic_pinger.radio import (
     build_message,
+    MeshtasticClient,
     resolve_destination,
     resolve_radio_mode,
 )
+
+
+class FakeNode:
+    def __init__(self, entry=None, node_num=None):
+        self.entry = entry or {}
+        self.nodeNum = node_num
+        self.localConfig = config_pb2.Config()
+
+
+class FakeSerialInterface:
+    def __init__(self, devPath=None):
+        self.nodesByNum = {}
+        self.nodesById = {}
+        self.sent = []
+
+    def getNode(self, node_id, requestChannels=False):
+        entry = self.nodesById.get(node_id)
+        if entry is None and isinstance(node_id, int):
+            entry = self.nodesByNum.get(node_id)
+        return FakeNode(entry)
+
+    def sendText(self, message, destinationId=None, wantAck=True, portNum=None):
+        self.sent.append(
+            {
+                "message": message,
+                "destinationId": destinationId,
+                "wantAck": wantAck,
+                "portNum": portNum,
+            }
+        )
+        return message
+
+    def close(self):
+        pass
 
 
 def test_build_message_formats_values() -> None:
@@ -74,4 +109,78 @@ def test_build_message_includes_signal_strength() -> None:
     )
     message = build_message("snr {snr}", fix, extra={"snr": -12.5})
     assert "snr -12.5" in message
+
+
+def test_build_message_includes_radio_signal_strength() -> None:
+    fix = GpsFix(
+        lat=0.0,
+        lon=0.0,
+        timestamp=datetime.now(timezone.utc),
+        hdop=None,
+        satellites=None,
+        fix_quality=None,
+    )
+    message = build_message("radio_snr {radio_snr}", fix, extra={"radio_snr": -3.2})
+    assert "radio_snr -3.2" in message
+
+
+def test_extract_snr_direct_value() -> None:
+    assert MeshtasticClient._extract_snr({"snr": -12.5}) == -12.5
+
+
+def test_extract_snr_from_last_received() -> None:
+    entry = {"lastReceived": {"rxSnr": -7.0}}
+    assert MeshtasticClient._extract_snr(entry) == -7.0
+
+
+def test_extract_snr_preserves_zero_rx_snr() -> None:
+    entry = {"lastReceived": {"rxSnr": 0.0, "snr": -5.0}}
+    assert MeshtasticClient._extract_snr(entry) == 0.0
+
+
+def test_extract_snr_unknown_value_returns_none() -> None:
+    assert MeshtasticClient._extract_snr({"snr": -128}) is None
+
+
+def test_resolve_destination_num_parses_hex_id() -> None:
+    assert MeshtasticClient._resolve_destination_num("!9e9f370c") == 0x9E9F370C
+    assert MeshtasticClient._resolve_destination_num("0x9e9f370c") == 0x9E9F370C
+    assert MeshtasticClient._resolve_destination_num("broadcast") is None
+
+
+def test_resolve_destination_num_excludes_reserved_addresses() -> None:
+    assert MeshtasticClient._resolve_destination_num(BROADCAST_ADDR) is None
+    assert MeshtasticClient._resolve_destination_num(LOCAL_ADDR) is None
+
+
+def test_read_signal_strength_supports_alias(monkeypatch) -> None:
+    fake_interface = FakeSerialInterface()
+    fake_interface.nodesById["myradio"] = {"snr": -7.5}
+    monkeypatch.setattr("meshtastic_pinger.radio.SerialInterface", lambda devPath=None: fake_interface)
+
+    client = MeshtasticClient(target_node="myradio", device=None, radio_mode=None)
+
+    assert client._read_signal_strength() == -7.5
+
+
+def test_send_fix_formats_missing_signal(monkeypatch) -> None:
+    fake_interface = FakeSerialInterface()
+    monkeypatch.setattr("meshtastic_pinger.radio.SerialInterface", lambda devPath=None: fake_interface)
+
+    fix = GpsFix(
+        lat=1.0,
+        lon=2.0,
+        timestamp=datetime.now(timezone.utc),
+        hdop=None,
+        satellites=None,
+        fix_quality=None,
+    )
+    client = MeshtasticClient(target_node="12345", device=None, radio_mode=None)
+
+    client.send_fix(fix, "sig {snr:.1f} radio {radio_snr}")
+
+    assert fake_interface.sent
+    sent_message = fake_interface.sent[0]["message"]
+    assert "sig n/a" in sent_message
+    assert "radio n/a" in sent_message
 

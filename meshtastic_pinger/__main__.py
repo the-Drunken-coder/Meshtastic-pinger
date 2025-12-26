@@ -44,7 +44,7 @@ def _run_loop(config: AppConfig) -> None:
         exclude_ports=exclude_ports,
     ) as gps_reader, MeshtasticClient(
         target_node=config.target_node,
-        device=config.meshtastic_port,
+        device=radio_port or config.meshtastic_port,
         want_ack=config.radio_ack,
         radio_mode=config.radio_mode,
     ) as radio:
