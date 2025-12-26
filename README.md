@@ -12,7 +12,7 @@ message to a configured target radio.
    python -m pip install -r requirements.txt
    ```
 
-2. Create a `meshtastic_pinger.json` file in the project root. The file should at least define `target_node`. Example:
+2. Create a `meshtastic_pinger.json` file in the project root or in the `meshtastic_pinger/` directory. The file should at least define `target_node`. Example:
 
    ```json
    {
@@ -31,7 +31,7 @@ message to a configured target radio.
 4. Run the pinger with:
 
    ```bash
-   python meshtastic_pinger.py
+   python -m meshtastic_pinger
    ```
 
    The script will continuously read the GPS device and DM the formatted coordinates to the configured target node. It handles reconnecting to
@@ -61,12 +61,27 @@ python -m pip install pytest
 python -m pytest
 ```
 
-## Message sink service
+## Meshtastic Listener
 
 To log incoming Meshtastic messages from a USB-connected radio, run:
 
 ```bash
-python message_sink_service.py --device /dev/ttyUSB0 --output meshtastic_messages.log
+python -m meshtastic_listener
 ```
 
-If `--device` is omitted the script will attempt to auto-detect the radio port.
+Or directly:
+
+```bash
+python -m meshtastic_listener.listener
+```
+
+By default, it will auto-detect the radio port and log messages to `meshtastic_messages.log`.
+
+### Configuration
+
+You can override defaults via environment variables:
+
+- `MESHTASTIC_LISTENER_CONFIG` – path to a JSON file (defaults to `meshtastic_listener.json`).
+- `MESHTASTIC_LISTENER_RADIO_PORT` – serial port for the Meshtastic radio.
+- `MESHTASTIC_LISTENER_OUTPUT` – path to the output log file (defaults to `meshtastic_messages.log`).
+- `MESHTASTIC_LISTENER_RADIO_MODE` – Meshtastic modem preset. Defaults to `longfast`.

@@ -6,7 +6,7 @@ from pathlib import Path
 from typing import Any, Dict, Optional
 import json
 
-DEFAULT_CONFIG_FILE = Path("meshtastic_pinger.json")
+DEFAULT_CONFIG_FILE = "meshtastic_pinger.json"
 DEFAULT_RADIO_MODE = "longfast"
 
 
@@ -53,11 +53,15 @@ def _as_optional_str(value: Any) -> Optional[str]:
 def load_config(config_path: Optional[Path] = None) -> AppConfig:
     env = os.environ
 
-    resolved_path = (
-        Path(env["MESHTASTIC_PINGER_CONFIG"])
-        if "MESHTASTIC_PINGER_CONFIG" in env
-        else (config_path or DEFAULT_CONFIG_FILE)
-    )
+    if "MESHTASTIC_PINGER_CONFIG" in env:
+        resolved_path = Path(env["MESHTASTIC_PINGER_CONFIG"])
+    elif config_path:
+        resolved_path = config_path
+    else:
+        # Check current working directory first, then package directory
+        cwd_path = Path(DEFAULT_CONFIG_FILE)
+        pkg_path = Path(__file__).parent / DEFAULT_CONFIG_FILE
+        resolved_path = cwd_path if cwd_path.exists() else pkg_path
 
     raw = _load_json(resolved_path)
 

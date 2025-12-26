@@ -1,11 +1,15 @@
 import threading
 import time
+from pathlib import Path
 
-from message_sink_service import _append_line, _build_handler, _extract_message_text, run_sink
+from meshtastic_listener.listener import (
+    _append_line,
+    _extract_message_text,
+    MeshtasticListener,
+)
 
 SETUP_RETRIES = 20
 THREAD_JOIN_TIMEOUT = 2
-
 
 def test_append_line_appends_messages(tmp_path):
     log_file = tmp_path / "messages.log"
@@ -14,21 +18,10 @@ def test_append_line_appends_messages(tmp_path):
 
     assert log_file.read_text().splitlines() == ["first", "second"]
 
-
-def test_handler_writes_text_and_payload_bytes(tmp_path):
-    log_file = tmp_path / "messages.log"
-    handler = _build_handler(log_file)
-    handler({"decoded": {"text": "hello"}}, None)
-    handler({"decoded": {"payload": b"world"}}, None)
-
-    assert log_file.read_text().splitlines() == ["hello", "world"]
-
-
 def test_extract_message_text_supports_variants():
     assert _extract_message_text({"decoded": {"text": "hello"}}) == "hello"
     assert _extract_message_text({"decoded": {"payload": b"bytes"}}) == "bytes"
     assert _extract_message_text({"decoded": {"data": "fallback"}}) == "fallback"
-
 
 class FakeInterface:
     def __init__(self, devPath=None):
@@ -43,8 +36,7 @@ class FakeInterface:
         if self.onReceive:
             self.onReceive(packet, self)
 
-
-def test_run_sink_listens_and_logs_packets(monkeypatch, tmp_path):
+def test_listener_listens_and_logs_packets(monkeypatch, tmp_path):
     log_file = tmp_path / "messages.log"
     stop_event = threading.Event()
     interface = FakeInterface()
@@ -55,16 +47,17 @@ def test_run_sink_listens_and_logs_packets(monkeypatch, tmp_path):
         auto_detect_calls.append(exclude_ports)
         return "/dev/ttyUSB0"
 
-    monkeypatch.setattr("message_sink_service.auto_detect_radio_port", fake_auto_detect)
+    monkeypatch.setattr("meshtastic_listener.listener.auto_detect_radio_port", fake_auto_detect)
+
+    listener = MeshtasticListener(
+        device=None,
+        output_path=log_file,
+        interface_factory=lambda devPath=None: interface,
+    )
 
     thread = threading.Thread(
-        target=run_sink,
-        kwargs={
-            "device": None,
-            "output": log_file,
-            "stop_event": stop_event,
-            "interface_factory": lambda devPath=None: interface,
-        },
+        target=listener.start,
+        kwargs={"stop_event": stop_event},
         daemon=True,
     )
     thread.start()
