@@ -1,0 +1,21 @@
+{
+  "target_node": "TARGET_RADIO_ID_OR_ALIAS",
+  "meshtastic_port": "COM8",
+  "gps_port": "COM12",
+  "send_interval_seconds": 60,
+  "gps_timeout_seconds": 15,
+  "message_template": "GPS {lat:.6f},{lon:.6f} sats {satellites} hdop {hdop:.1f} {time}",
+  "want_ack": true,
+  "radio_mode": "longfast"
+}
+{
+  "target_node": "TARGET_RADIO_ID_OR_ALIAS",
+  "meshtastic_port": "COM8",
+  "gps_port": "COM12",
+  "send_interval_seconds": 60,
+  "gps_timeout_seconds": 15,
+  "message_template": "GPS {lat:.6f},{lon:.6f} sats {satellites} hdop {hdop:.1f} {time}",
+  "want_ack": true,
+  "radio_mode": "longfast"
+}
+
