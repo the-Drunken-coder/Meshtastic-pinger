@@ -1,23 +1,10 @@
-import http.client
-import json
 import threading
+import time
 
-from http.server import ThreadingHTTPServer
+from message_sink_service import _append_line, _build_handler, _extract_message_text, run_sink
 
-from message_sink_service import MAX_BODY_SIZE, _append_line, _build_handler
-
-SERVER_SHUTDOWN_TIMEOUT = 5
-DEFAULT_HEADERS = {"Content-Type": "text/plain"}
-
-
-def _post(server: ThreadingHTTPServer, body: str, headers: dict[str, str] | None = None) -> int:
-    headers = headers or DEFAULT_HEADERS
-    conn = http.client.HTTPConnection("localhost", server.server_address[1])
-    conn.request("POST", "/", body=body, headers=headers)
-    response = conn.getresponse()
-    status = response.status
-    conn.close()
-    return status
+SETUP_RETRIES = 20
+THREAD_JOIN_TIMEOUT = 2
 
 
 def test_append_line_appends_messages(tmp_path):
@@ -28,92 +15,72 @@ def test_append_line_appends_messages(tmp_path):
     assert log_file.read_text().splitlines() == ["first", "second"]
 
 
-def test_service_writes_plain_and_json_messages(tmp_path):
+def test_handler_writes_text_and_payload_bytes(tmp_path):
     log_file = tmp_path / "messages.log"
     handler = _build_handler(log_file)
-    server = ThreadingHTTPServer(("localhost", 0), handler)
-
-    thread = threading.Thread(target=server.serve_forever, daemon=True)
-    thread.start()
-
-    assert _post(server, "hello") == 204
-
-    assert (
-        _post(server, json.dumps({"message": "world"}), headers={"Content-Type": "application/json"})
-        == 204
-    )
-
-    server.shutdown()
-    thread.join(timeout=SERVER_SHUTDOWN_TIMEOUT)
-    server.server_close()
+    handler({"decoded": {"text": "hello"}}, None)
+    handler({"decoded": {"payload": b"world"}}, None)
 
     assert log_file.read_text().splitlines() == ["hello", "world"]
 
 
-def test_invalid_content_length_is_rejected(tmp_path):
-    log_file = tmp_path / "messages.log"
-    handler = _build_handler(log_file)
-    server = ThreadingHTTPServer(("localhost", 0), handler)
+def test_extract_message_text_supports_variants():
+    assert _extract_message_text({"decoded": {"text": "hello"}}) == "hello"
+    assert _extract_message_text({"decoded": {"payload": b"bytes"}}) == "bytes"
+    assert _extract_message_text({"decoded": {"data": "fallback"}}) == "fallback"
 
-    thread = threading.Thread(target=server.serve_forever, daemon=True)
+
+class FakeInterface:
+    def __init__(self, devPath=None):
+        self.devPath = devPath
+        self.onReceive = None
+        self.closed = False
+
+    def close(self):
+        self.closed = True
+
+    def emit(self, packet):
+        if self.onReceive:
+            self.onReceive(packet, self)
+
+
+def test_run_sink_listens_and_logs_packets(monkeypatch, tmp_path):
+    log_file = tmp_path / "messages.log"
+    stop_event = threading.Event()
+    interface = FakeInterface()
+
+    auto_detect_calls = []
+
+    def fake_auto_detect(exclude_ports=None):
+        auto_detect_calls.append(exclude_ports)
+        return "/dev/ttyUSB0"
+
+    monkeypatch.setattr("message_sink_service.auto_detect_radio_port", fake_auto_detect)
+
+    thread = threading.Thread(
+        target=run_sink,
+        kwargs={
+            "device": None,
+            "output": log_file,
+            "stop_event": stop_event,
+            "interface_factory": lambda devPath=None: interface,
+        },
+        daemon=True,
+    )
     thread.start()
 
-    conn = http.client.HTTPConnection("localhost", server.server_address[1])
-    conn.putrequest("POST", "/")
-    conn.putheader("Content-Length", "invalid")
-    conn.endheaders()
-    response = conn.getresponse()
-    assert response.status == 400
-    conn.close()
+    for _ in range(SETUP_RETRIES):
+        if interface.onReceive:
+            break
+        time.sleep(0.01)
 
-    server.shutdown()
-    thread.join(timeout=SERVER_SHUTDOWN_TIMEOUT)
-    server.server_close()
+    assert interface.onReceive is not None
 
-    assert not log_file.exists()
+    interface.emit({"decoded": {"text": "ping"}})
+    interface.emit({"decoded": {"payload": b"pong"}})
+    stop_event.set()
+    thread.join(timeout=THREAD_JOIN_TIMEOUT)
 
-
-def test_negative_content_length_is_rejected(tmp_path):
-    log_file = tmp_path / "messages.log"
-    handler = _build_handler(log_file)
-    server = ThreadingHTTPServer(("localhost", 0), handler)
-
-    thread = threading.Thread(target=server.serve_forever, daemon=True)
-    thread.start()
-
-    conn = http.client.HTTPConnection("localhost", server.server_address[1])
-    conn.putrequest("POST", "/")
-    conn.putheader("Content-Length", "-1")
-    conn.endheaders()
-    response = conn.getresponse()
-    assert response.status == 400
-    conn.close()
-
-    server.shutdown()
-    thread.join(timeout=SERVER_SHUTDOWN_TIMEOUT)
-    server.server_close()
-
-    assert not log_file.exists()
-
-
-def test_payload_too_large_is_rejected(tmp_path):
-    log_file = tmp_path / "messages.log"
-    handler = _build_handler(log_file)
-    server = ThreadingHTTPServer(("localhost", 0), handler)
-
-    thread = threading.Thread(target=server.serve_forever, daemon=True)
-    thread.start()
-
-    conn = http.client.HTTPConnection("localhost", server.server_address[1])
-    conn.putrequest("POST", "/")
-    conn.putheader("Content-Length", str(MAX_BODY_SIZE + 1))
-    conn.endheaders()
-    response = conn.getresponse()
-    assert response.status == 413
-    conn.close()
-
-    server.shutdown()
-    thread.join(timeout=SERVER_SHUTDOWN_TIMEOUT)
-    server.server_close()
-
-    assert not log_file.exists()
+    assert log_file.read_text().splitlines() == ["ping", "pong"]
+    assert interface.closed
+    assert auto_detect_calls == [None]
