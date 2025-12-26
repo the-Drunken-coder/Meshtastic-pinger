@@ -5,6 +5,8 @@ import json
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 
+MAX_BODY_SIZE = 1024 * 1024  # 1MB safety cap
+
 
 def _append_line(path: Path, message: str) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
@@ -15,9 +17,27 @@ def _append_line(path: Path, message: str) -> None:
 def _build_handler(log_path: Path) -> type[BaseHTTPRequestHandler]:
     class MessageHandler(BaseHTTPRequestHandler):
         def do_POST(self) -> None:
-            length = int(self.headers.get("Content-Length", "0"))
-            raw = self.rfile.read(length)
-            message = raw.decode("utf-8")
+            try:
+                length = int(self.headers.get("Content-Length", "0"))
+            except ValueError:
+                self.send_response(400)
+                self.end_headers()
+                return
+
+            if length < 0:
+                self.send_response(400)
+                self.end_headers()
+                return
+            if length > MAX_BODY_SIZE:
+                self.send_response(413)
+                self.end_headers()
+                return
+
+            if length == 0:
+                message = ""
+            else:
+                raw = self.rfile.read(length)
+                message = raw.decode("utf-8", errors="replace")
 
             if self.headers.get("Content-Type", "").startswith("application/json"):
                 try:
@@ -27,7 +47,7 @@ def _build_handler(log_path: Path) -> type[BaseHTTPRequestHandler]:
                 except json.JSONDecodeError:
                     pass
 
-            _append_line(log_path, message.strip())
+            _append_line(log_path, message)
             self.send_response(204)
             self.end_headers()
 
