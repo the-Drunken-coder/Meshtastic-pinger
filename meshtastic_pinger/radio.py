@@ -96,7 +96,14 @@ class MeshtasticClient:
     def __post_init__(self) -> None:
         self._destination = resolve_destination(self.target_node)
         self._destination_num = self._resolve_destination_num(self._destination)
-        self._interface = SerialInterface(devPath=self.device)
+        
+        logger.info("Connecting to Meshtastic radio on %s (timeout=20s)...", self.device)
+        try:
+            self._interface = SerialInterface(devPath=self.device, timeout=20)
+        except Exception as exc:
+            logger.error("Failed to connect to radio: %s", exc)
+            raise
+
         self._radio_mode_value = resolve_radio_mode(self.radio_mode)
         self._configure_radio_mode()
 
