@@ -80,6 +80,10 @@ def parse_nmea_sentence(sentence: str) -> Optional[GpsFix]:
     if fix_quality == 0:
         return None
 
+    # Filter out "null" fixes (0,0) often sent by modules before they have a real lock
+    if float(latitude) == 0.0 and float(longitude) == 0.0:
+        return None
+
     return GpsFix(
         lat=float(latitude),
         lon=float(longitude),

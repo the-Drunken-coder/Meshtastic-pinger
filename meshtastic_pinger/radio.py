@@ -180,18 +180,8 @@ class MeshtasticClient:
                 if snr is not None:
                     return snr
 
-            node = self._interface.getNode(self._destination)
-            entry = getattr(node, "entry", None)
-            if entry is not None:
-                snr = self._extract_snr(entry)
-                if snr is not None:
-                    return snr
-
-            node_num = getattr(node, "nodeNum", None)
-            if node_num is not None:
-                snr = self._extract_snr(nodes.get(node_num))
-                if snr is not None:
-                    return snr
+            # DO NOT call self._interface.getNode(self._destination) here
+            # as it triggers a remote admin query which fails with ADMIN_PUBLIC_KEY_UNAUTHORIZED
         except Exception as exc:  # pragma: no cover - library-side failure
             logger.debug("Unable to read signal strength for %s: %s", self._destination, exc)
             return None
