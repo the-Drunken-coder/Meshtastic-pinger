@@ -63,11 +63,10 @@ python -m pytest
 
 ## Message sink service
 
-To capture incoming pinger messages over HTTP and append them to a text file, run:
+To log incoming Meshtastic messages from a USB-connected radio, run:
 
 ```bash
-python message_sink_service.py --port 8080 --output meshtastic_messages.log
+python message_sink_service.py --device /dev/ttyUSB0 --output meshtastic_messages.log
 ```
 
-Send POST requests to `http://<host>:8080/`; the request body (or the `message`
-field from JSON payloads) is appended to the specified log for later processing.
+If `--device` is omitted the script will attempt to auto-detect the radio port.
