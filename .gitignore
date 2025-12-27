@@ -16,4 +16,5 @@ htmlcov/
 .idea/
 .vscode/
 *.log
+meshtastic_messages.txt
 
