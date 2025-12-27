@@ -45,10 +45,11 @@ def _coerce_float(value: Optional[str]) -> Optional[float]:
 
 
 def _build_timestamp(sent_time: Optional[datetime.time]) -> datetime.datetime:
-    now = datetime.datetime.now(datetime.timezone.utc)
+    # Use local time zone for human-readable message timestamps
+    now = datetime.datetime.now().astimezone()
     if sent_time is None:
         return now
-    sent = datetime.datetime.combine(now.date(), sent_time, tzinfo=datetime.timezone.utc)
+    sent = datetime.datetime.combine(now.date(), sent_time).replace(tzinfo=now.tzinfo)
     if sent > now + datetime.timedelta(minutes=1):
         sent = sent - datetime.timedelta(days=1)
     return sent

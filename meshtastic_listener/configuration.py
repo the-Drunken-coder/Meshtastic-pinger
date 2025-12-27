@@ -8,7 +8,7 @@ from typing import Any, Dict, Optional
 
 DEFAULT_CONFIG_FILE = Path("meshtastic_listener.json")
 DEFAULT_RADIO_MODE = "longfast"
-DEFAULT_OUTPUT_FILE = "meshtastic_messages.log"
+DEFAULT_OUTPUT_FILE = "meshtastic_messages.txt"
 
 @dataclass(frozen=True)
 class ListenerConfig:

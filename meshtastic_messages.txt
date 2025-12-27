@@ -1,0 +1,4 @@
+message: GPS 42.345036,-71.081822 sats 7 hdop 3.1 snr 7.5 radio 7.5 03:40:06 | sent_at: 2025-12-26T03:40:06 | received_at: 2025-12-26T22:44:19.090462 | delay_s: 17747.000
+message: GPS 42.345036,-71.081822 sats 7 hdop 3.1 snr 7.5 radio 7.5 03:40:07 | sent_at: 2025-12-26T03:40:07 | received_at: 2025-12-26T22:45:07.205550 | delay_s: 17700.000
+message: GPS 42.345038,-71.081822 sats 7 hdop 3.1 snr 7.5 radio 7.5 03:40:08 | sent_at: 2025-12-26T03:40:08 | received_at: 2025-12-26T22:46:07.553486 | delay_s: 17641.000
+message: GPS 42.345036,-71.081821 sats 7 hdop 3.1 snr 7.5 radio 7.5 03:40:09 | sent_at: 2025-12-26T03:40:09 | received_at: 2025-12-26T22:47:07.459918 | delay_s: 17582.000

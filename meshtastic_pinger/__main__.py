@@ -1,8 +1,15 @@
 from __future__ import annotations
 
 import logging
+import sys
 import time
+from pathlib import Path
 from typing import Optional, Set
+
+# Add the project root to sys.path to allow running this file directly
+if __name__ == "__main__" and __package__ is None:
+    sys.path.append(str(Path(__file__).resolve().parent.parent))
+    __package__ = "meshtastic_pinger"
 
 from .configuration import AppConfig, load_config
 from .gps import SerialGpsReader
