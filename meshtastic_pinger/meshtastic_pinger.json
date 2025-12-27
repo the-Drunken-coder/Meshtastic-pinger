@@ -1,9 +1,8 @@
 {
-  "target_node": "!9e9f370c",
-  "send_interval_seconds": 60,
+  "target_node": "!db583ef4",
+  "send_interval_seconds": 30,
   "gps_timeout_seconds": 15,
   "message_template": "GPS {lat:.6f},{lon:.6f} sats {satellites} hdop {hdop:.1f} snr {snr} radio {radio_snr} {time}",
   "want_ack": true,
   "radio_mode": "longfast"
 }
-
