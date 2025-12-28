@@ -21,7 +21,7 @@ class FakeNode:
 
 
 class FakeSerialInterface:
-    def __init__(self, devPath=None):
+    def __init__(self, devPath=None, **_):
         self.nodesByNum = {}
         self.nodesById = {}
         self.sent = []
@@ -156,7 +156,7 @@ def test_resolve_destination_num_excludes_reserved_addresses() -> None:
 def test_read_signal_strength_supports_alias(monkeypatch) -> None:
     fake_interface = FakeSerialInterface()
     fake_interface.nodesById["myradio"] = {"snr": -7.5}
-    monkeypatch.setattr("meshtastic_pinger.radio.SerialInterface", lambda devPath=None: fake_interface)
+    monkeypatch.setattr("meshtastic_pinger.radio.SerialInterface", lambda devPath=None, **kwargs: fake_interface)
 
     client = MeshtasticClient(target_node="myradio", device=None, radio_mode=None)
 
@@ -165,7 +165,7 @@ def test_read_signal_strength_supports_alias(monkeypatch) -> None:
 
 def test_send_fix_formats_missing_signal(monkeypatch) -> None:
     fake_interface = FakeSerialInterface()
-    monkeypatch.setattr("meshtastic_pinger.radio.SerialInterface", lambda devPath=None: fake_interface)
+    monkeypatch.setattr("meshtastic_pinger.radio.SerialInterface", lambda devPath=None, **kwargs: fake_interface)
 
     fix = GpsFix(
         lat=1.0,
@@ -184,3 +184,28 @@ def test_send_fix_formats_missing_signal(monkeypatch) -> None:
     assert "sig n/a" in sent_message
     assert "radio n/a" in sent_message
 
+
+def test_send_fix_appends_tx_timestamp(monkeypatch) -> None:
+    fake_interface = FakeSerialInterface()
+    monkeypatch.setattr(
+        "meshtastic_pinger.radio.SerialInterface",
+        lambda devPath=None, **kwargs: fake_interface,
+    )
+
+    fix = GpsFix(
+        lat=1.0,
+        lon=2.0,
+        timestamp=datetime.now(timezone.utc),
+        hdop=None,
+        satellites=None,
+        fix_quality=None,
+    )
+    client = MeshtasticClient(target_node="12345", device=None, radio_mode=None)
+
+    client.send_fix(fix, "hello")
+
+    assert fake_interface.sent
+    sent_message = fake_interface.sent[0]["message"]
+    assert "tx=" in sent_message
+    tx_part = sent_message.rsplit("tx=", 1)[1].split()[0]
+    assert float(tx_part) > 0
