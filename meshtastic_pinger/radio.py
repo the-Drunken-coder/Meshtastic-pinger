@@ -14,7 +14,7 @@ from .gps import GpsFix
 
 logger = logging.getLogger(__name__)
 
-_TX_TAG_PATTERN = re.compile(r"\btx=\d+(?:\.\d+)?")
+_TX_TAG_PATTERN = re.compile(r"\btx=(\d+(?:\.\d+)?)")
 
 
 class _SafeUnavailable(str):
