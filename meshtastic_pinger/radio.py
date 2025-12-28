@@ -14,7 +14,7 @@ from .gps import GpsFix
 
 logger = logging.getLogger(__name__)
 
-_TX_TAG_REGEX = r"\btx=\d+(?:\.\d+)?"
+_TX_TAG_PATTERN = re.compile(r"\btx=\d+(?:\.\d+)?")
 
 
 class _SafeUnavailable(str):
@@ -219,7 +219,7 @@ class MeshtasticClient:
             logger.info("Radio signal strength: %s dB", radio_signal)
         tx_epoch = time.time()
         message = build_message(template, fix, extra=extras or None)
-        if not re.search(_TX_TAG_REGEX, message):
+        if not _TX_TAG_PATTERN.search(message):
             message = f"{message} tx={tx_epoch:.3f}"
         logger.info("Sending to %s: %s", self._destination, message)
         return self._interface.sendText(
