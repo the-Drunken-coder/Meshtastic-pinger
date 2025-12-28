@@ -2,13 +2,16 @@ from __future__ import annotations
 
 import json
 import logging
+import re
 import sys
+import time
 from pathlib import Path
 from threading import Event
 from typing import Any, Callable
 from collections import deque
-from datetime import datetime
-from datetime import datetime
+from datetime import datetime, timezone
+
+_TX_TAG_PATTERN = re.compile(r"\btx=(\d+(?:\.\d+)?)")
 
 # Add the project root to sys.path to allow running this file directly
 if __name__ == "__main__" and __package__ is None:
@@ -100,15 +103,13 @@ def _parse_sent_time(raw: Any) -> datetime | None:
         return None
     try:
         if isinstance(raw, (int, float)):
-            if raw > 1e9:  # epoch seconds
-                return datetime.fromtimestamp(float(raw))
-            return datetime.fromtimestamp(float(raw))
+            return datetime.fromtimestamp(float(raw), tz=timezone.utc)
         if isinstance(raw, str):
             text = raw.strip()
             if not text:
                 return None
             if text.isdigit():
-                return datetime.fromtimestamp(float(text))
+                return datetime.fromtimestamp(float(text), tz=timezone.utc)
             try:
                 return datetime.fromisoformat(text)
             except Exception:
@@ -129,6 +130,16 @@ def _parse_time_from_message_tail(message: str, received_at: datetime) -> dateti
         hour, minute, second = map(int, tail.split(":"))
         return received_at.replace(hour=hour, minute=minute, second=second, microsecond=0)
     except Exception:
+        return None
+
+def _parse_tx_epoch(message: str) -> float | None:
+    """Extract a transmit epoch timestamp from a 'tx=' tag in the message text."""
+    match = _TX_TAG_PATTERN.search(message)
+    if not match:
+        return None
+    try:
+        return float(match.group(1))
+    except ValueError:
         return None
 
 class MeshtasticListener:
@@ -237,18 +248,23 @@ class MeshtasticListener:
                 list(packet.get("decoded", {}).keys()) if isinstance(packet.get("decoded"), dict) else None,
             )
             return
-        
-        received_dt = datetime.now()
+        received_epoch = time.time()
+        received_dt = datetime.fromtimestamp(received_epoch, tz=timezone.utc)
+        tx_epoch = _parse_tx_epoch(str(message))
+        sent_dt = None
+        delay_seconds = None
         sent_raw = decoded.get("timestamp") or decoded.get("time") or packet.get("timestamp")
-        sent_dt = _parse_sent_time(sent_raw) or _parse_time_from_message_tail(str(message), received_dt)
+        if tx_epoch is not None:
+            sent_dt = datetime.fromtimestamp(tx_epoch, tz=timezone.utc)
+            delay_seconds = max(0.0, received_epoch - tx_epoch)
+        else:
+            sent_dt = _parse_sent_time(sent_raw) or _parse_time_from_message_tail(str(message), received_dt)
+            if sent_dt:
+                delay_seconds = max(0.0, (received_dt - sent_dt).total_seconds())
 
         delay_label = "n/a"
-        if sent_dt:
-            recv_secs = received_dt.hour * 3600 + received_dt.minute * 60 + received_dt.second
-            sent_secs = sent_dt.hour * 3600 + sent_dt.minute * 60 + sent_dt.second
-            diff = abs(recv_secs - sent_secs)
-            diff = min(diff, 86400 - diff)  # wrap within a day
-            delay_label = f"{diff:.3f}"
+        if sent_dt and delay_seconds is not None:
+            delay_label = f"{delay_seconds:.3f}"
 
         logger.info(
             "Received message: %s (sent_at=%s received_at=%s delay_s=%s)",
@@ -416,4 +432,3 @@ def main() -> None:
 
 if __name__ == "__main__":
     main()
-

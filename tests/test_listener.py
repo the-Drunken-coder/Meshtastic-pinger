@@ -155,6 +155,45 @@ def test_listener_listens_and_logs_packets(monkeypatch, tmp_path):
     assert interface.closed
     assert auto_detect_calls == [None]
 
+
+def test_listener_uses_tx_timestamp_for_delay(monkeypatch, tmp_path):
+    log_file = tmp_path / "messages.log"
+    stop_event = threading.Event()
+    interface = FakeInterface()
+
+    monkeypatch.setattr(
+        "meshtastic_listener.listener.auto_detect_radio_port", lambda exclude_ports=None: "/dev/ttyUSB0"
+    )
+
+    listener = MeshtasticListener(
+        device=None,
+        output_path=log_file,
+        interface_factory=lambda devPath=None, **kwargs: interface,
+    )
+
+    thread = threading.Thread(
+        target=listener.start,
+        kwargs={"stop_event": stop_event},
+        daemon=True,
+    )
+    thread.start()
+
+    for _ in range(SETUP_RETRIES):
+        if interface.onReceive:
+            break
+        time.sleep(0.01)
+
+    tx_epoch = time.time()
+    interface.emit({"decoded": {"text": f"ping tx={tx_epoch:.3f}"}})
+    stop_event.set()
+    thread.join(timeout=THREAD_JOIN_TIMEOUT)
+
+    lines = log_file.read_text().splitlines()
+    assert len(lines) == 1
+    assert "tx=" in lines[0]
+    delay_value = float(lines[0].split("delay_s: ")[1])
+    assert 0 <= delay_value < 1.0
+
 def test_listener_deduplicates_packets(monkeypatch, tmp_path):
     log_file = tmp_path / "messages.log"
     stop_event = threading.Event()
