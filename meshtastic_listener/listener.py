@@ -10,7 +10,8 @@ from threading import Event
 from typing import Any, Callable
 from collections import deque
 from datetime import datetime
-from datetime import datetime
+
+_TX_TAG_PATTERN = re.compile(r"\btx=(\d+(?:\.\d+)?)")
 
 # Add the project root to sys.path to allow running this file directly
 if __name__ == "__main__" and __package__ is None:
@@ -102,8 +103,6 @@ def _parse_sent_time(raw: Any) -> datetime | None:
         return None
     try:
         if isinstance(raw, (int, float)):
-            if raw > 1e9:  # epoch seconds
-                return datetime.fromtimestamp(float(raw))
             return datetime.fromtimestamp(float(raw))
         if isinstance(raw, str):
             text = raw.strip()
@@ -134,7 +133,8 @@ def _parse_time_from_message_tail(message: str, received_at: datetime) -> dateti
         return None
 
 def _parse_tx_epoch(message: str) -> float | None:
-    match = re.search(r"\btx=(\d+(?:\.\d+)?)", message)
+    """Extract a transmit epoch timestamp from a 'tx=' tag in the message text."""
+    match = _TX_TAG_PATTERN.search(message)
     if not match:
         return None
     try:
@@ -252,6 +252,7 @@ class MeshtasticListener:
         received_dt = datetime.fromtimestamp(received_epoch)
         tx_epoch = _parse_tx_epoch(str(message))
         sent_dt = None
+        delay_seconds = None
         sent_raw = decoded.get("timestamp") or decoded.get("time") or packet.get("timestamp")
         if tx_epoch is not None:
             sent_dt = datetime.fromtimestamp(tx_epoch)
@@ -262,7 +263,7 @@ class MeshtasticListener:
                 delay_seconds = abs((received_dt - sent_dt).total_seconds())
 
         delay_label = "n/a"
-        if sent_dt:
+        if sent_dt and delay_seconds is not None:
             delay_label = f"{delay_seconds:.3f}"
 
         logger.info(
