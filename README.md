@@ -83,5 +83,24 @@ You can override defaults via environment variables:
 
 - `MESHTASTIC_LISTENER_CONFIG` – path to a JSON file (defaults to `meshtastic_listener.json`).
 - `MESHTASTIC_LISTENER_RADIO_PORT` – serial port for the Meshtastic radio.
-- `MESHTASTIC_LISTENER_OUTPUT` – path to the output log file (defaults to `meshtastic_messages.log`).
+- `MESHTASTIC_LISTENER_OUTPUT` – path to the output log file (defaults to `meshtastic_messages.txt`).
 - `MESHTASTIC_LISTENER_RADIO_MODE` – Meshtastic modem preset. Defaults to `longfast`.
+
+## Meshtastic Mapper
+
+To visualize GPS coordinates from logged messages, run:
+
+```bash
+python -m meshtastic_mapper
+```
+
+This will parse `meshtastic_messages.txt` and generate an interactive HTML map (`meshtastic_map.html`) showing:
+- All GPS coordinates as markers
+- A polyline connecting the points in order
+- Clickable markers with detailed information (coordinates, satellites, HDOP, timestamps, delay)
+
+You can specify custom input and output files:
+
+```bash
+python -m meshtastic_mapper input_file.txt output_map.html
+```
